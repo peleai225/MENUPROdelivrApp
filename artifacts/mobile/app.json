@@ -23,7 +23,10 @@
     },
     "android": {
       "package": "com.menupro.delivery",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "$GOOGLE_SERVICES_JSON",
+      "adaptiveIcon": {
+        "backgroundColor": "#f97316"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
