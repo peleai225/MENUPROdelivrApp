@@ -1,0 +1,104 @@
+import React, { useEffect, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/context/AuthContext';
+import { fetchOrderHistory } from '@/lib/endpoints';
+import { formatOrderDate, formatPrice } from '@/lib/format';
+import { StatusBadge } from '@/components/StatusBadge';
+import { EmptyState } from '@/components/EmptyState';
+import { Button } from '@/components/Button';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import type { Order } from '@/types';
+
+const TRACKABLE_STATUSES = ['pending', 'pending_payment', 'confirmed', 'preparing', 'ready', 'delivering'];
+
+export default function OrdersScreen() {
+  const colors = useColors();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [page, setPage] = useState(1);
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [authLoading, isAuthenticated]);
+
+  const query = useQuery({
+    queryKey: ['orders-history', page],
+    queryFn: () => fetchOrderHistory(page),
+    enabled: isAuthenticated,
+  });
+
+  useEffect(() => {
+    if (query.data) {
+      setAllOrders((prev) => (page === 1 ? query.data.data : [...prev, ...query.data.data]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.data]);
+
+  if (!isAuthenticated) return null;
+
+  const hasMore = query.data ? query.data.current_page < query.data.last_page : false;
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScreenHeader title="Mes commandes" />
+      <FlatList
+        data={allOrders}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.reference, { color: colors.foreground }]}>#{item.reference}</Text>
+              <StatusBadge status={item.status} />
+            </View>
+            <Text style={[styles.itemsSummary, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {item.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+            </Text>
+            <View style={styles.cardFooter}>
+              <Text style={[styles.date, { color: colors.mutedForeground }]}>{formatOrderDate(item.created_at)}</Text>
+              <Text style={[styles.total, { color: colors.foreground }]}>{formatPrice(item.total)}</Text>
+            </View>
+            {TRACKABLE_STATUSES.includes(item.status) && (
+              <Button
+                label="Suivre la commande"
+                variant="outline"
+                onPress={() => router.push(`/track/${item.tracking_token}`)}
+              />
+            )}
+          </View>
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        ListEmptyComponent={
+          !query.isLoading ? (
+            <EmptyState icon="clock" title="Aucune commande" description="Votre historique de commandes apparaîtra ici." />
+          ) : null
+        }
+        ListFooterComponent={
+          hasMore ? (
+            <View style={styles.loadMoreWrap}>
+              <Button label="Charger plus" variant="outline" onPress={() => setPage((p) => p + 1)} loading={query.isFetching} />
+            </View>
+          ) : null
+        }
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  listContent: { padding: 16 },
+  card: { borderRadius: 18, borderWidth: 1, padding: 14, gap: 8 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reference: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  itemsSummary: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  date: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  total: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  loadMoreWrap: { marginTop: 8, marginBottom: 20 },
+});
