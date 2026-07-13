@@ -53,6 +53,43 @@ const colors = {
     infoSoft: '#f2ecfd',
   },
 
+  dark: {
+    text: '#f1f5f9',
+    tint: '#fb923c',
+
+    background: '#0f172a',
+    foreground: '#f1f5f9',
+
+    card: '#1e293b',
+    cardForeground: '#f1f5f9',
+
+    primary: '#fb923c',
+    primaryForeground: '#ffffff',
+
+    secondary: '#e2e8f0',
+    secondaryForeground: '#0f172a',
+
+    muted: '#1e293b',
+    mutedForeground: '#94a3b8',
+
+    accent: '#431407',
+    accentForeground: '#fdba74',
+
+    destructive: '#ef4444',
+    destructiveForeground: '#ffffff',
+
+    border: '#334155',
+    input: '#334155',
+
+    surface: '#1e293b',
+    success: '#22c55e',
+    successSoft: '#052e16',
+    warning: '#f59e0b',
+    warningSoft: '#451a03',
+    info: '#a78bfa',
+    infoSoft: '#2e1065',
+  },
+
   // Border radius (in px): rounded-2xl cards ≈ 20px, pill buttons handled separately.
   radius: 20,
 };

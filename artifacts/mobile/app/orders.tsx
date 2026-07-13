@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { fetchOrderHistory } from '@/lib/endpoints';
+import { useToast } from '@/context/ToastContext';
+import { cancelOrder, fetchOrderHistory } from '@/lib/endpoints';
+import { getErrorMessage } from '@/lib/api';
 import { formatOrderDate, formatPrice } from '@/lib/format';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState } from '@/components/EmptyState';
@@ -13,12 +15,37 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import type { Order } from '@/types';
 
 const TRACKABLE_STATUSES = ['pending', 'pending_payment', 'confirmed', 'preparing', 'ready', 'delivering'];
+const CANCELLABLE_STATUSES = ['pending', 'pending_payment', 'confirmed'];
 
 export default function OrdersScreen() {
   const colors = useColors();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
+
+  const cancelMutation = useMutation({
+    mutationFn: cancelOrder,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders-history'] });
+      setPage(1);
+      setAllOrders([]);
+      toast.show('Commande annulée', 'success');
+    },
+    onError: (error) => toast.show(getErrorMessage(error, "Impossible d'annuler la commande"), 'error'),
+  });
+
+  const handleCancel = (order: Order) => {
+    Alert.alert(
+      'Annuler la commande',
+      `Voulez-vous vraiment annuler la commande #${order.reference} ?`,
+      [
+        { text: 'Non', style: 'cancel' },
+        { text: 'Oui, annuler', style: 'destructive', onPress: () => cancelMutation.mutate(order.id) },
+      ],
+    );
+  };
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -67,7 +94,15 @@ export default function OrdersScreen() {
               <Button
                 label="Suivre la commande"
                 variant="outline"
-                onPress={() => router.push(`/track/${item.tracking_token}`)}
+                onPress={() => router.push(`/orders/track/${item.tracking_token}` as import('expo-router').Href)}
+              />
+            )}
+            {CANCELLABLE_STATUSES.includes(item.status) && (
+              <Button
+                label="Annuler la commande"
+                variant="destructive"
+                onPress={() => handleCancel(item)}
+                loading={cancelMutation.isPending && cancelMutation.variables === item.id}
               />
             )}
           </View>

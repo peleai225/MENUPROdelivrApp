@@ -32,9 +32,10 @@ function RootLayoutNav() {
       <Stack.Screen name="restaurant/[id]/index" options={{ headerShown: false }} />
       <Stack.Screen name="restaurant/[id]/menu" options={{ headerShown: false }} />
       <Stack.Screen name="checkout" options={{ headerShown: false }} />
-      <Stack.Screen name="track/[token]" options={{ headerShown: false }} />
+      <Stack.Screen name="payment-result" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="orders/track/[token]" options={{ headerShown: false }} />
       <Stack.Screen name="orders" options={{ headerShown: false }} />
-      <Stack.Screen name="addresses" options={{ headerShown: false }} />
+      <Stack.Screen name="profile/addresses" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="register" options={{ headerShown: false, presentation: 'modal' }} />
     </Stack>

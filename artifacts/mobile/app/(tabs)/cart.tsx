@@ -1,9 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useLocationContext } from '@/context/LocationContext';
@@ -15,12 +25,26 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import type { Address } from '@/types';
 
+// Reverse geocode via expo-location
+async function reverseGeocode(lat: number, lng: number): Promise<{ address: string; city: string }> {
+  try {
+    const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+    const r = results[0];
+    if (!r) throw new Error('no result');
+    const street = [r.streetNumber, r.street].filter(Boolean).join(' ') || r.name || 'Position actuelle';
+    const city = r.city || r.subregion || r.region || 'Abidjan';
+    return { address: street, city };
+  } catch {
+    return { address: 'Position GPS', city: 'Abidjan' };
+  }
+}
+
 export default function CartScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
   const { isAuthenticated } = useAuth();
-  const { coords } = useLocationContext();
+  const { coords, isUsingFallback } = useLocationContext();
   const items = useCartStore((state) => state.items);
   const restaurantId = useCartStore((state) => state.restaurantId);
   const restaurantName = useCartStore((state) => state.restaurantName);
@@ -34,6 +58,10 @@ export default function CartScreen() {
   const [manualAddress, setManualAddress] = useState('');
   const [manualCity, setManualCity] = useState('Abidjan');
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  // null = aucune, 'gps' = position actuelle
+  const [useGpsAddress, setUseGpsAddress] = useState(false);
+  const [gpsLabel, setGpsLabel] = useState<{ address: string; city: string } | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const addressesQuery = useQuery({
     queryKey: ['addresses'],
@@ -41,23 +69,44 @@ export default function CartScreen() {
     enabled: isAuthenticated,
   });
 
+  // Sélectionner l'adresse par défaut au chargement
   useEffect(() => {
     const addresses = addressesQuery.data ?? [];
-    if (!selectedAddressId && addresses.length) {
+    if (!selectedAddressId && addresses.length && !useGpsAddress) {
       const preferred = addresses.find((a) => a.is_default) ?? addresses[0];
       setSelectedAddressId(preferred.id);
     }
-  }, [addressesQuery.data, selectedAddressId]);
+  }, [addressesQuery.data, selectedAddressId, useGpsAddress]);
 
-  const selectedAddress: Address | undefined = addressesQuery.data?.find((a) => a.id === selectedAddressId);
+  const savedAddresses = addressesQuery.data ?? [];
+  const selectedAddress: Address | undefined = savedAddresses.find((a) => a.id === selectedAddressId);
 
-  const estimateCoords = selectedAddress
-    ? { latitude: selectedAddress.latitude, longitude: selectedAddress.longitude }
-    : coords;
+  // Utiliser la position GPS comme adresse de livraison
+  const handleUseGps = async () => {
+    setGpsLoading(true);
+    setUseGpsAddress(true);
+    setSelectedAddressId(null);
+    const label = await reverseGeocode(coords.latitude, coords.longitude);
+    setGpsLabel(label);
+    if (!isAuthenticated) {
+      setManualAddress(label.address);
+      setManualCity(label.city);
+    }
+    setGpsLoading(false);
+  };
+
+  // Coordonnées effectives pour l'estimation
+  const estimateCoords =
+    useGpsAddress
+      ? coords
+      : selectedAddress
+        ? { latitude: selectedAddress.latitude, longitude: selectedAddress.longitude }
+        : coords;
 
   const estimateQuery = useQuery({
     queryKey: ['delivery-estimate', restaurantId, estimateCoords.latitude, estimateCoords.longitude],
-    queryFn: () => fetchDeliveryEstimate(restaurantId as number, estimateCoords.latitude, estimateCoords.longitude),
+    queryFn: () =>
+      fetchDeliveryEstimate(restaurantId as number, estimateCoords.latitude, estimateCoords.longitude),
     enabled: !!restaurantId,
   });
 
@@ -65,7 +114,7 @@ export default function CartScreen() {
   const total = subtotal + deliveryFee;
 
   const canCheckout = isAuthenticated
-    ? !!selectedAddress
+    ? useGpsAddress || !!selectedAddress
     : manualAddress.trim().length > 3 && manualCity.trim().length > 1;
 
   const handleCheckout = () => {
@@ -73,7 +122,16 @@ export default function CartScreen() {
       router.push('/login');
       return;
     }
-    if (selectedAddress) {
+
+    if (useGpsAddress && gpsLabel) {
+      setCheckoutAddress({
+        label: 'Ma position actuelle',
+        address: gpsLabel.address,
+        city: gpsLabel.city,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      });
+    } else if (selectedAddress) {
       setCheckoutAddress({
         label: selectedAddress.label,
         address: selectedAddress.address,
@@ -116,6 +174,7 @@ export default function CartScreen() {
         <Text style={[styles.title, { color: colors.foreground }]}>Panier</Text>
         <Text style={[styles.restaurantName, { color: colors.mutedForeground }]}>{restaurantName}</Text>
 
+        {/* Articles */}
         <View style={styles.items}>
           {items.map((item) => (
             <View key={item.dishId} style={[styles.itemRow, { borderColor: colors.border }]}>
@@ -123,7 +182,9 @@ export default function CartScreen() {
                 <Text style={[styles.itemName, { color: colors.foreground }]} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={[styles.itemPrice, { color: colors.primary }]}>{formatPrice(item.price)}</Text>
+                <Text style={[styles.itemPrice, { color: colors.primary }]}>
+                  {formatPrice(item.price)}
+                </Text>
               </View>
               <View style={styles.itemActions}>
                 <View style={[styles.stepper, { backgroundColor: colors.muted }]}>
@@ -134,7 +195,9 @@ export default function CartScreen() {
                     onPress={() => updateQuantity(item.dishId, item.quantity - 1)}
                     style={styles.stepperIcon}
                   />
-                  <Text style={[styles.stepperValue, { color: colors.foreground }]}>{item.quantity}</Text>
+                  <Text style={[styles.stepperValue, { color: colors.foreground }]}>
+                    {item.quantity}
+                  </Text>
                   <Feather
                     name="plus"
                     size={15}
@@ -154,75 +217,182 @@ export default function CartScreen() {
           ))}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Adresse de livraison</Text>
+        {/* Adresse de livraison */}
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          Adresse de livraison
+        </Text>
+
+        {/* Bouton GPS — toujours visible */}
+        <Pressable
+          onPress={handleUseGps}
+          style={[
+            styles.gpsBtn,
+            {
+              backgroundColor: useGpsAddress ? colors.primary + '15' : colors.muted,
+              borderColor: useGpsAddress ? colors.primary : colors.border,
+            },
+          ]}
+        >
+          {gpsLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <View style={[styles.gpsIconWrap, { backgroundColor: useGpsAddress ? colors.primary : colors.accent }]}>
+              <Feather name="navigation" size={15} color={useGpsAddress ? '#ffffff' : colors.primary} />
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.gpsBtnLabel, { color: useGpsAddress ? colors.primary : colors.foreground }]}>
+              {useGpsAddress && gpsLabel ? gpsLabel.address : 'Utiliser ma position actuelle'}
+            </Text>
+            <Text style={[styles.gpsBtnSub, { color: colors.mutedForeground }]}>
+              {useGpsAddress && gpsLabel
+                ? gpsLabel.city
+                : isUsingFallback
+                  ? 'Position par défaut (Abidjan)'
+                  : 'GPS activé — position précise'}
+            </Text>
+          </View>
+          {useGpsAddress && (
+            <View style={[styles.radioCheck, { backgroundColor: colors.primary }]}>
+              <Feather name="check" size={11} color="#ffffff" />
+            </View>
+          )}
+        </Pressable>
+
+        {/* Adresses sauvegardées (utilisateur connecté) */}
         {isAuthenticated ? (
           <View style={styles.addressList}>
-            {(addressesQuery.data ?? []).map((addr) => (
-              <View
-                key={addr.id}
-                style={[
-                  styles.addressCard,
-                  {
-                    borderColor: selectedAddressId === addr.id ? colors.primary : colors.border,
-                    backgroundColor: selectedAddressId === addr.id ? colors.accent : colors.card,
-                  },
-                ]}
-              >
-                <Feather
-                  name="map-pin"
-                  size={16}
-                  color={colors.primary}
-                  onPress={() => setSelectedAddressId(addr.id)}
-                />
-                <View style={{ flex: 1 }} onTouchEnd={() => setSelectedAddressId(addr.id)}>
-                  <Text style={[styles.addressLabel, { color: colors.foreground }]}>{addr.label}</Text>
-                  <Text style={[styles.addressText, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {addr.address}, {addr.city}
-                  </Text>
-                </View>
-              </View>
-            ))}
-            <Button label="+ Nouvelle adresse" variant="outline" onPress={() => router.push('/addresses')} />
+            {savedAddresses.map((addr) => {
+              const active = !useGpsAddress && selectedAddressId === addr.id;
+              return (
+                <Pressable
+                  key={addr.id}
+                  onPress={() => {
+                    setUseGpsAddress(false);
+                    setSelectedAddressId(addr.id);
+                  }}
+                  style={[
+                    styles.addressCard,
+                    {
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary + '10' : colors.card,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.addrIcon,
+                      { backgroundColor: active ? colors.primary : colors.accent },
+                    ]}
+                  >
+                    <Feather
+                      name="map-pin"
+                      size={14}
+                      color={active ? '#ffffff' : colors.primary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.addrLabel, { color: colors.foreground }]}>
+                      {addr.label}
+                      {addr.is_default && (
+                        <Text style={{ color: colors.primary }}> · Défaut</Text>
+                      )}
+                    </Text>
+                    <Text
+                      style={[styles.addrText, { color: colors.mutedForeground }]}
+                      numberOfLines={1}
+                    >
+                      {addr.address}, {addr.city}
+                    </Text>
+                  </View>
+                  {active && (
+                    <View style={[styles.radioCheck, { backgroundColor: colors.primary }]}>
+                      <Feather name="check" size={11} color="#ffffff" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => router.push('/profile/addresses' as import('expo-router').Href)}
+              style={[styles.newAddrBtn, { borderColor: colors.border }]}
+            >
+              <Feather name="plus" size={15} color={colors.primary} />
+              <Text style={[styles.newAddrText, { color: colors.primary }]}>
+                Nouvelle adresse
+              </Text>
+            </Pressable>
           </View>
         ) : (
+          // Formulaire pour visiteur non connecté
           <View style={styles.manualForm}>
             <TextInput
               value={manualAddress}
-              onChangeText={setManualAddress}
-              placeholder="Adresse (quartier, rue...)"
+              onChangeText={(t) => { setManualAddress(t); setUseGpsAddress(false); }}
+              placeholder="Quartier, rue, description..."
               placeholderTextColor={colors.mutedForeground}
-              style={[styles.manualInput, { backgroundColor: colors.muted, color: colors.foreground }]}
+              style={[
+                styles.manualInput,
+                { backgroundColor: colors.muted, color: colors.foreground },
+              ]}
             />
             <TextInput
               value={manualCity}
-              onChangeText={setManualCity}
+              onChangeText={(t) => { setManualCity(t); setUseGpsAddress(false); }}
               placeholder="Ville"
               placeholderTextColor={colors.mutedForeground}
-              style={[styles.manualInput, { backgroundColor: colors.muted, color: colors.foreground }]}
+              style={[
+                styles.manualInput,
+                { backgroundColor: colors.muted, color: colors.foreground },
+              ]}
             />
           </View>
         )}
 
+        {/* Récapitulatif financier */}
         <View style={[styles.recap, { borderColor: colors.border }]}>
           <View style={styles.recapRow}>
             <Text style={[styles.recapLabel, { color: colors.mutedForeground }]}>Sous-total</Text>
-            <Text style={[styles.recapValue, { color: colors.foreground }]}>{formatPrice(subtotal)}</Text>
+            <Text style={[styles.recapValue, { color: colors.foreground }]}>
+              {formatPrice(subtotal)}
+            </Text>
           </View>
           <View style={styles.recapRow}>
-            <Text style={[styles.recapLabel, { color: colors.mutedForeground }]}>Frais de livraison</Text>
+            <Text style={[styles.recapLabel, { color: colors.mutedForeground }]}>
+              Frais de livraison
+            </Text>
             <Text style={[styles.recapValue, { color: colors.foreground }]}>
               {estimateQuery.isLoading ? '...' : formatPrice(deliveryFee)}
             </Text>
           </View>
+          {estimateQuery.data?.is_peak_hour && (
+            <View style={styles.recapRow}>
+              <Text style={[styles.recapLabel, { color: '#f97316' }]}>
+                🔥 Heure de pointe
+              </Text>
+              <Text style={[styles.recapValue, { color: '#f97316' }]}>inclus</Text>
+            </View>
+          )}
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.recapRow}>
             <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total</Text>
-            <Text style={[styles.totalValue, { color: colors.primary }]}>{formatPrice(total)}</Text>
+            <Text style={[styles.totalValue, { color: colors.primary }]}>
+              {formatPrice(total)}
+            </Text>
           </View>
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12, borderColor: colors.border, backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: insets.bottom + 12,
+            borderColor: colors.border,
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
         <Button
           label={isAuthenticated ? 'Commander' : 'Se connecter pour commander'}
           onPress={handleCheckout}
@@ -239,28 +409,70 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 8 },
   title: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   restaurantName: { fontSize: 14, fontFamily: 'Inter_500Medium', marginTop: 2, marginBottom: 8 },
+
+  // Articles
   items: { gap: 10, marginBottom: 8 },
   itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    paddingBottom: 12,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', borderBottomWidth: 1, paddingBottom: 12,
   },
   itemInfo: { flex: 1, gap: 3 },
   itemName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   itemPrice: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   itemActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingHorizontal: 10, gap: 10, paddingVertical: 6 },
+  stepper: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 999, paddingHorizontal: 10, gap: 10, paddingVertical: 6,
+  },
   stepperIcon: { padding: 2 },
   stepperValue: { fontSize: 13, fontFamily: 'Inter_700Bold', minWidth: 14, textAlign: 'center' },
+
+  // Section titre
   sectionTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginTop: 16, marginBottom: 10 },
-  addressList: { gap: 10 },
-  addressCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, padding: 12 },
-  addressLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  addressText: { fontSize: 12.5, fontFamily: 'Inter_400Regular', marginTop: 2 },
+
+  // Bouton GPS
+  gpsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 16, borderWidth: 1.5, padding: 12,
+  },
+  gpsIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gpsBtnLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  gpsBtnSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+
+  // Adresses sauvegardées
+  addressList: { gap: 8 },
+  addressCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 16, borderWidth: 1.5, padding: 12,
+  },
+  addrIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addrLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  addrText: { fontSize: 12.5, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  radioCheck: {
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  newAddrBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: 14, borderStyle: 'dashed',
+    padding: 12, justifyContent: 'center',
+  },
+  newAddrText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+
+  // Formulaire manuel
   manualForm: { gap: 10 },
-  manualInput: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  manualInput: {
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13,
+    fontSize: 14, fontFamily: 'Inter_400Regular',
+  },
+
+  // Récap
   recap: { borderTopWidth: 1, marginTop: 20, paddingTop: 14, gap: 10 },
   recapRow: { flexDirection: 'row', justifyContent: 'space-between' },
   recapLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },
@@ -268,5 +480,7 @@ const styles = StyleSheet.create({
   divider: { height: 1 },
   totalLabel: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   totalValue: { fontSize: 17, fontFamily: 'Inter_700Bold' },
+
+  // Footer
   footer: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12 },
 });

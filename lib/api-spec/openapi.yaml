@@ -10,6 +10,487 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: restaurants
+    description: Restaurant operations
+  - name: addresses
+    description: Address management
+  - name: orders
+    description: Order management
+  - name: payment
+    description: Payment operations
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HealthStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+    Customer:
+      type: object
+      required:
+        - id
+        - name
+        - phone
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type:
+            - string
+            - "null"
+        city:
+          type:
+            - string
+            - "null"
+        total_orders:
+          type: integer
+    AuthResponse:
+      type: object
+      required:
+        - token
+        - customer
+      properties:
+        token:
+          type: string
+        customer:
+          $ref: "#/components/schemas/Customer"
+    Restaurant:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - category
+        - city
+        - address
+        - phone
+        - is_open
+        - min_order_amount
+        - avg_prep_time
+        - latitude
+        - longitude
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        category:
+          type: string
+        city:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        logo_url:
+          type:
+            - string
+            - "null"
+        banner_url:
+          type:
+            - string
+            - "null"
+        is_open:
+          type: boolean
+        min_order_amount:
+          type: integer
+        avg_prep_time:
+          type: integer
+        latitude:
+          type: number
+        longitude:
+          type: number
+        distance_km:
+          type:
+            - number
+            - "null"
+        delivery_fee:
+          type:
+            - integer
+            - "null"
+        estimated_minutes:
+          type:
+            - integer
+            - "null"
+    Dish:
+      type: object
+      required:
+        - id
+        - name
+        - price
+        - is_available
+        - is_featured
+        - is_spicy
+        - is_vegetarian
+        - prep_time
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        price:
+          type: integer
+        compare_price:
+          type:
+            - integer
+            - "null"
+        image_url:
+          type:
+            - string
+            - "null"
+        is_available:
+          type: boolean
+        is_featured:
+          type: boolean
+        is_spicy:
+          type: boolean
+        is_vegetarian:
+          type: boolean
+        prep_time:
+          type: integer
+        calories:
+          type:
+            - integer
+            - "null"
+    MenuCategory:
+      type: object
+      required:
+        - id
+        - name
+        - dishes
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        dishes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Dish"
+    MenuResponse:
+      type: object
+      required:
+        - restaurant_id
+        - currency
+        - categories
+      properties:
+        restaurant_id:
+          type: integer
+        currency:
+          type: string
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuCategory"
+    DeliveryEstimateBreakdown:
+      type: object
+      required:
+        - base_fee
+        - distance_fee
+        - peak_surcharge
+        - prep_minutes
+        - transit_minutes
+      properties:
+        base_fee:
+          type: integer
+        distance_fee:
+          type: integer
+        peak_surcharge:
+          type: integer
+        prep_minutes:
+          type: integer
+        transit_minutes:
+          type: integer
+    DeliveryEstimate:
+      type: object
+      required:
+        - deliverable
+        - delivery_fee
+        - distance_km
+        - estimated_minutes
+        - is_peak_hour
+        - breakdown
+      properties:
+        deliverable:
+          type: boolean
+        delivery_fee:
+          type: integer
+        distance_km:
+          type: number
+        estimated_minutes:
+          type: integer
+        is_peak_hour:
+          type: boolean
+        breakdown:
+          $ref: "#/components/schemas/DeliveryEstimateBreakdown"
+    Address:
+      type: object
+      required:
+        - id
+        - label
+        - address
+        - city
+        - latitude
+        - longitude
+        - is_default
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        zone:
+          type:
+            - string
+            - "null"
+        latitude:
+          type: number
+        longitude:
+          type: number
+        instructions:
+          type:
+            - string
+            - "null"
+        is_default:
+          type: boolean
+    CreateOrderItem:
+      type: object
+      required:
+        - dish_id
+        - quantity
+      properties:
+        dish_id:
+          type: integer
+        quantity:
+          type: integer
+        notes:
+          type: string
+    CreateOrderPayload:
+      type: object
+      required:
+        - restaurant_id
+        - items
+        - delivery_lat
+        - delivery_lng
+        - delivery_address
+        - delivery_city
+        - payment_method
+      properties:
+        restaurant_id:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateOrderItem"
+        delivery_lat:
+          type: number
+        delivery_lng:
+          type: number
+        delivery_address:
+          type: string
+        delivery_city:
+          type: string
+        delivery_instructions:
+          type: string
+        payment_method:
+          type: string
+          enum:
+            - wave
+    OrderItem:
+      type: object
+      required:
+        - name
+        - quantity
+        - unit_price
+        - total
+      properties:
+        name:
+          type: string
+        quantity:
+          type: integer
+        unit_price:
+          type: integer
+        total:
+          type: integer
+    Order:
+      type: object
+      required:
+        - id
+        - reference
+        - tracking_token
+        - status
+        - payment_method
+        - subtotal
+        - delivery_fee
+        - total
+        - estimated_minutes
+        - items
+      properties:
+        id:
+          type: integer
+        reference:
+          type: string
+        tracking_token:
+          type: string
+        status:
+          type: string
+        payment_method:
+          type: string
+        subtotal:
+          type: integer
+        delivery_fee:
+          type: integer
+        total:
+          type: integer
+        estimated_minutes:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        created_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    CreateOrderResponse:
+      type: object
+      required:
+        - order
+        - tracking_token
+        - payment_url
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
+        tracking_token:
+          type: string
+        payment_url:
+          type: string
+    PaginatedOrders:
+      type: object
+      required:
+        - data
+        - current_page
+        - last_page
+        - total
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        current_page:
+          type: integer
+        last_page:
+          type: integer
+        total:
+          type: integer
+    TrackingDriver:
+      type: object
+      required:
+        - name
+        - phone
+        - latitude
+        - longitude
+        - rating
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        rating:
+          type: string
+    TrackingTimeline:
+      type: object
+      properties:
+        ordered_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        confirmed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        preparing_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        ready_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        driver_assigned_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        picked_up_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        completed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    TrackingDelivery:
+      type: object
+      required:
+        - status
+        - status_label
+      properties:
+        status:
+          type: string
+        status_label:
+          type: string
+        driver:
+          oneOf:
+            - $ref: "#/components/schemas/TrackingDriver"
+            - type: "null"
+    TrackingResponse:
+      type: object
+      required:
+        - order_status
+        - estimated_minutes
+        - timeline
+      properties:
+        order_status:
+          type: string
+        estimated_minutes:
+          type: integer
+        delivery:
+          $ref: "#/components/schemas/TrackingDelivery"
+        timeline:
+          $ref: "#/components/schemas/TrackingTimeline"
 paths:
   /healthz:
     get:
@@ -24,13 +505,484 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-components:
-  schemas:
-    HealthStatus:
-      type: object
-      properties:
-        status:
-          type: string
-      required:
-        - status
-
+  /client/auth/register:
+    post:
+      operationId: registerClient
+      tags: [auth]
+      summary: Register a new client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - phone
+                - password
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                password:
+                  type: string
+                email:
+                  type: string
+                city:
+                  type: string
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /client/auth/login:
+    post:
+      operationId: loginClient
+      tags: [auth]
+      summary: Login client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - password
+              properties:
+                phone:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /client/auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated client
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current client profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /client/auth/logout:
+    post:
+      operationId: logoutClient
+      tags: [auth]
+      summary: Logout current client
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Logged out successfully
+  /client/auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update client profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                city:
+                  type: string
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /restaurants:
+    get:
+      operationId: listRestaurants
+      tags: [restaurants]
+      summary: List restaurants
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: lat
+          in: query
+          schema:
+            type: number
+        - name: lng
+          in: query
+          schema:
+            type: number
+        - name: open_now
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of restaurants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Restaurant"
+  /restaurants/nearby:
+    get:
+      operationId: listNearbyRestaurants
+      tags: [restaurants]
+      summary: List nearby restaurants
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: radius_km
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: List of nearby restaurants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Restaurant"
+  /restaurants/{id}:
+    get:
+      operationId: getRestaurant
+      tags: [restaurants]
+      summary: Get a restaurant by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restaurant details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Restaurant"
+  /restaurants/{id}/menu:
+    get:
+      operationId: getRestaurantMenu
+      tags: [restaurants]
+      summary: Get restaurant menu
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Menu with categories and dishes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuResponse"
+  /restaurants/{id}/delivery-estimate:
+    get:
+      operationId: getDeliveryEstimate
+      tags: [restaurants]
+      summary: Get delivery estimate for a restaurant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Delivery estimate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryEstimate"
+  /client/addresses:
+    get:
+      operationId: listAddresses
+      tags: [addresses]
+      summary: List client addresses
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of saved addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Address"
+    post:
+      operationId: createAddress
+      tags: [addresses]
+      summary: Create a new address
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - label
+                - address
+                - city
+                - latitude
+                - longitude
+                - is_default
+              properties:
+                label:
+                  type: string
+                address:
+                  type: string
+                city:
+                  type: string
+                zone:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                instructions:
+                  type: string
+                is_default:
+                  type: boolean
+      responses:
+        "201":
+          description: Created address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+  /client/addresses/{id}:
+    patch:
+      operationId: updateAddress
+      tags: [addresses]
+      summary: Update an address
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                address:
+                  type: string
+                city:
+                  type: string
+                zone:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                instructions:
+                  type: string
+                is_default:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+    delete:
+      operationId: deleteAddress
+      tags: [addresses]
+      summary: Delete an address
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Address deleted
+  /client/orders:
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a new order
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderPayload"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOrderResponse"
+  /client/orders/history:
+    get:
+      operationId: listOrderHistory
+      tags: [orders]
+      summary: List order history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated order history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrders"
+  /client/orders/track/{token}:
+    get:
+      operationId: trackOrder
+      tags: [orders]
+      summary: Track an order by token (public)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order tracking information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackingResponse"
+  /client/orders/{id}/cancel:
+    post:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel an order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Order cancelled
+  /client/payment/{orderId}/initiate:
+    post:
+      operationId: initiatePayment
+      tags: [payment]
+      summary: Initiate payment for an order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - payment_url
+                properties:
+                  payment_url:
+                    type: string
+  /client/payment/{orderId}/status:
+    get:
+      operationId: getPaymentStatus
+      tags: [payment]
+      summary: Get payment status for an order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment and order status
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - payment_status
+                  - order_status
+                properties:
+                  payment_status:
+                    type: string
+                  order_status:
+                    type: string

@@ -8,10 +8,9 @@ function groupThousands(n: number): string {
   return sign + groups.join(' ');
 }
 
-/** MenuPro API prices are in XOF centimes. Divide by 100 before display. */
-export function formatPrice(cents: number | null | undefined): string {
-  const amount = Math.round((cents ?? 0) / 100);
-  return `${groupThousands(amount)} FCFA`;
+/** Prices are in XOF (FCFA) — already full units, no division needed. */
+export function formatPrice(amount: number | null | undefined): string {
+  return `${groupThousands(Math.round(amount ?? 0))} FCFA`;
 }
 
 export function formatDistance(km: number | null | undefined): string {

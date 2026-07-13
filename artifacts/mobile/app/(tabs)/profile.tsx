@@ -137,7 +137,7 @@ export default function ProfileScreen() {
       <View style={[styles.linksCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <ProfileLink icon="clock" label="Mes commandes" onPress={() => router.push('/orders')} colors={colors} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <ProfileLink icon="map-pin" label="Mes adresses" onPress={() => router.push('/addresses')} colors={colors} />
+        <ProfileLink icon="map-pin" label="Mes adresses" onPress={() => router.push('/profile/addresses' as import('expo-router').Href)} colors={colors} />
       </View>
 
       <View style={[styles.linksCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

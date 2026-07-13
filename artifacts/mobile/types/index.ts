@@ -116,6 +116,8 @@ export interface Order {
   created_at?: string;
 }
 
+export type PaymentMethod = 'wave' | 'cash';
+
 export interface CreateOrderPayload {
   restaurant_id: number;
   items: { dish_id: number; quantity: number; notes?: string }[];
@@ -124,7 +126,7 @@ export interface CreateOrderPayload {
   delivery_address: string;
   delivery_city: string;
   delivery_instructions?: string;
-  payment_method: 'wave';
+  payment_method: 'wave';  // L'API n'accepte que 'wave' — 'cash' est géré côté app
 }
 
 export interface CreateOrderResponse {

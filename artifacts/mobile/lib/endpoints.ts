@@ -30,6 +30,32 @@ export async function loginClient(payload: { phone: string; password: string }) 
   return data;
 }
 
+/** Firebase Phone Auth — exchange a Firebase idToken for a MENUPro session token. */
+export async function loginWithFirebasePhone(payload: { firebase_id_token: string; phone: string }) {
+  const { data } = await api.post<AuthResponse>('/client/auth/firebase-phone', payload);
+  return data;
+}
+
+/** Firebase Phone Auth — register a new account after phone verification. */
+export async function registerWithFirebasePhone(payload: {
+  firebase_id_token: string;
+  phone: string;
+  name: string;
+  password: string;
+  email?: string;
+  city?: string;
+}) {
+  const { data } = await api.post<AuthResponse>('/client/auth/register', {
+    name: payload.name,
+    phone: payload.phone,
+    password: payload.password,
+    email: payload.email,
+    city: payload.city,
+    firebase_id_token: payload.firebase_id_token,
+  });
+  return data;
+}
+
 export async function fetchMe() {
   const { data } = await api.get<{ customer: Customer } | Customer>('/client/auth/me');
   return 'customer' in data ? data.customer : data;
