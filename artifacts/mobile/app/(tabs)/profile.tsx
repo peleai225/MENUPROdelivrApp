@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { getErrorMessage } from '@/lib/api';
+import { getNotificationPermissionStatus, requestNotificationPermission } from '@/lib/notifications';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 
@@ -21,6 +22,39 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState(customer?.email ?? '');
   const [city, setCity] = useState(customer?.city ?? '');
   const [saving, setSaving] = useState(false);
+  const [notifStatus, setNotifStatus] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      getNotificationPermissionStatus().then(setNotifStatus);
+    }, []),
+  );
+
+  const handleToggleNotifications = async (value: boolean) => {
+    if (!value) {
+      Alert.alert(
+        'Notifications désactivées',
+        'Pour désactiver les notifications, utilisez les réglages de votre téléphone.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Ouvrir les réglages', onPress: () => Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      Alert.alert(
+        'Autorisation requise',
+        'Activez les notifications dans les réglages de votre téléphone pour suivre vos commandes en direct.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Ouvrir les réglages', onPress: () => Linking.openSettings() },
+        ],
+      );
+    }
+    setNotifStatus(await getNotificationPermissionStatus());
+  };
 
   React.useEffect(() => {
     setName(customer?.name ?? '');
@@ -106,6 +140,27 @@ export default function ProfileScreen() {
         <ProfileLink icon="map-pin" label="Mes adresses" onPress={() => router.push('/addresses')} colors={colors} />
       </View>
 
+      <View style={[styles.linksCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.notifRow}>
+          <View style={styles.linkRowLeft}>
+            <View style={[styles.linkIconWrap, { backgroundColor: colors.accent }]}>
+              <Feather name="bell" size={16} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.linkLabel, { color: colors.foreground }]}>Notifications</Text>
+              <Text style={[styles.notifSubtitle, { color: colors.mutedForeground }]}>
+                {notifStatus === 'granted' ? 'Activées' : 'Suivi de vos commandes en direct'}
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={notifStatus === 'granted'}
+            onValueChange={handleToggleNotifications}
+            trackColor={{ true: colors.primary, false: colors.border }}
+          />
+        </View>
+      </View>
+
       <Button label="Déconnexion" variant="destructive" onPress={handleLogout} fullWidth />
     </ScrollView>
   );
@@ -164,4 +219,12 @@ const styles = StyleSheet.create({
   linkIconWrap: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   linkLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
   divider: { height: 1 },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  notifSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
 });

@@ -1,9 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { OnboardingFlow } from '@/components/OnboardingFlow';
 import { AuthProvider } from '@/context/AuthContext';
 import { LocationProvider } from '@/context/LocationContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -21,6 +23,7 @@ import * as SplashScreen from 'expo-splash-screen';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+const ONBOARDING_KEY = 'menupro_onboarding_seen';
 
 function RootLayoutNav() {
   return (
@@ -45,14 +48,26 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    AsyncStorage.getItem(ONBOARDING_KEY)
+      .then((value) => setHasSeenOnboarding(value === 'true'))
+      .catch(() => setHasSeenOnboarding(true));
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && hasSeenOnboarding !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, hasSeenOnboarding]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || hasSeenOnboarding === null) return null;
+
+  const handleOnboardingDone = () => {
+    AsyncStorage.setItem(ONBOARDING_KEY, 'true').catch(() => {});
+    setHasSeenOnboarding(true);
+  };
 
   return (
     <SafeAreaProvider>
@@ -63,7 +78,11 @@ export default function RootLayout() {
               <AuthProvider>
                 <LocationProvider>
                   <ToastProvider>
-                    <RootLayoutNav />
+                    {hasSeenOnboarding ? (
+                      <RootLayoutNav />
+                    ) : (
+                      <OnboardingFlow onDone={handleOnboardingDone} />
+                    )}
                   </ToastProvider>
                 </LocationProvider>
               </AuthProvider>

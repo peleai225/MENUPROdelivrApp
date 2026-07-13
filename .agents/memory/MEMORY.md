@@ -1,1 +1,2 @@
 - [Expo web preview limitations](expo-web-preview-limitations.md) — react-native-maps breaks web bundling; external APIs without CORS break web-preview data fetches; both are native-only non-issues.
+- [Image processing in sandbox](image-processing-cli.md) — sharp npm package isn't installed; use ImageMagick (`magick`) via shell for icon/splash generation instead.

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
@@ -6,10 +6,26 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useCheckoutStore } from '@/lib/checkoutStore';
 import { trackOrder } from '@/lib/endpoints';
-import { formatMinutes } from '@/lib/format';
+import { formatMinutes, getOrderStatusMeta } from '@/lib/format';
+import { notifyLocally } from '@/lib/notifications';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TrackingMap } from '@/components/TrackingMap';
 import { ABIDJAN_FALLBACK } from '@/context/LocationContext';
+
+/**
+ * MenuPro's API is external and read-only for us — we can't register device push tokens with it,
+ * so a real server-sent push isn't possible here. Instead, each poll below compares the new
+ * order_status against the last one we saw and fires a local notification on change, giving the
+ * user the same "your order moved forward" alert without needing backend support.
+ */
+const STATUS_NOTIFICATION_BODY: Record<string, string> = {
+  confirmed: 'Le restaurant a confirmé votre commande.',
+  preparing: 'Votre commande est en cours de préparation.',
+  ready: 'Votre commande est prête et attend un livreur.',
+  delivering: 'Un livreur a récupéré votre commande, elle arrive bientôt !',
+  completed: 'Votre commande a été livrée. Bon appétit !',
+  cancelled: 'Votre commande a été annulée.',
+};
 
 const STEPS: { key: 'ordered_at' | 'confirmed_at' | 'preparing_at' | 'driver_assigned_at' | 'picked_up_at' | 'completed_at'; label: string }[] = [
   { key: 'ordered_at', label: 'Commande passée' },
@@ -34,6 +50,19 @@ export default function TrackScreen() {
 
   const data = trackingQuery.data;
   const driver = data?.delivery?.driver;
+
+  const lastNotifiedStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const status = data?.order_status;
+    if (!status || status === lastNotifiedStatus.current) return;
+    const isFirstRead = lastNotifiedStatus.current === null;
+    lastNotifiedStatus.current = status;
+    if (isFirstRead) return; // don't notify for the status already visible on screen load
+    const body = STATUS_NOTIFICATION_BODY[status];
+    if (body) {
+      notifyLocally(`Commande ${getOrderStatusMeta(status).label.toLowerCase()}`, body).catch(() => {});
+    }
+  }, [data?.order_status]);
 
   const mapRegion = {
     latitude: driver?.latitude ?? address?.latitude ?? ABIDJAN_FALLBACK.latitude,

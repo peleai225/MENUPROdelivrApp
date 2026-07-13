@@ -16,6 +16,7 @@ Native mobile food-ordering & delivery app for Côte d'Ivoire (Expo/React Native
 - zustand (+ persist/AsyncStorage) for cart state; AsyncStorage for auth token/customer
 - react-hook-form + zod for Login/Register validation
 - react-native-maps (pinned 1.18.0) for the order-tracking map, native-only (see Gotchas)
+- expo-notifications for local order-status notifications (see Architecture decisions)
 
 ## Where things live
 
@@ -23,12 +24,16 @@ Native mobile food-ordering & delivery app for Côte d'Ivoire (Expo/React Native
 - `artifacts/mobile/lib/format.ts` — price (centimes→FCFA), distance, date formatting, CI phone validation
 - `artifacts/mobile/context/` — Auth, Cart, Location, Toast providers
 - `artifacts/mobile/app/` — screens: tabs (Home/Explore/Cart/Profile), restaurant detail+menu, checkout, order tracking, order history, addresses, login/register
+- `artifacts/mobile/components/OnboardingFlow.tsx` — first-launch welcome/onboarding slides, rendered by `app/_layout.tsx` (not a route) when `menupro_onboarding_seen` isn't set in AsyncStorage
+- `artifacts/mobile/lib/notifications.ts` — notification permission + local notification helpers
 
 ## Architecture decisions
 
 - Live order tracking uses polling (`refetchInterval` ~5s on `GET /client/orders/track/{token}`) instead of WebSocket/Laravel Echo — a deliberate simplification from the original spec.
 - Payment is Wave-only: `createOrder` → `initiatePayment` → open `payment_url` in an in-app browser (`expo-web-browser`) → redirect to tracking screen.
 - No backend of our own for this feature — all data comes directly from the external production API; this app is a pure client.
+- Push notifications are **local only**: since MenuPro's API is external/read-only, we can't register device push tokens with it for real server-sent push. `track/[token].tsx` compares each poll's `order_status` to the previous one and fires a local notification on change (confirmed/preparing/ready/delivering/completed/cancelled) — same user-facing result without backend changes. Permission is requested on the last onboarding slide and toggleable in Profil.
+- App icon/splash are generated from the user-provided logo (ImageMagick, not sharp — sharp isn't installed in this environment) via a one-off shell command; regenerate the same way if the logo changes.
 
 ## Product
 
@@ -36,7 +41,7 @@ Browse nearby restaurants, view menus, build a cart (locked to one restaurant at
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Branding must be based on the user-provided logo (black "menu" wordmark, orange chef-hat accent + "PRO" + delivery-scooter icon, "Delivery" subtitle) — used for the app icon, splash screen, and onboarding hero.
 
 ## Gotchas
 
