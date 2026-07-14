@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useCheckoutStore } from '@/lib/checkoutStore';
 import { trackOrder } from '@/lib/endpoints';
 import { formatMinutes, getOrderStatusMeta } from '@/lib/format';
 import { notifyLocally } from '@/lib/notifications';
+import { Button } from '@/components/Button';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TrackingMap } from '@/components/TrackingMap';
 import { ABIDJAN_FALLBACK } from '@/context/LocationContext';
@@ -220,6 +221,20 @@ export default function TrackScreen() {
           </View>
         )}
 
+        {data?.order_status === 'completed' && (
+          <View style={[styles.deliveredBanner, { backgroundColor: colors.successSoft }]}>
+            <Feather name="check-circle" size={20} color={colors.success} />
+            <Text style={[styles.deliveredText, { color: colors.success }]}>Commande livrée — Bon appétit !</Text>
+          </View>
+        )}
+
+        {data?.order_status === 'cancelled' && (
+          <View style={[styles.deliveredBanner, { backgroundColor: '#fdeaea' }]}>
+            <Feather name="x-circle" size={20} color={colors.destructive} />
+            <Text style={[styles.deliveredText, { color: colors.destructive }]}>Commande annulée</Text>
+          </View>
+        )}
+
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Suivi de la commande</Text>
         <View style={styles.timeline}>
           {STEPS.map((step, index) => {
@@ -250,6 +265,21 @@ export default function TrackScreen() {
             );
           })}
         </View>
+        {(data?.order_status === 'completed' || data?.order_status === 'cancelled') && (
+          <View style={styles.ctaWrap}>
+            <Button
+              label="Commander à nouveau"
+              onPress={() => router.replace('/')}
+              fullWidth
+            />
+            <Button
+              label="Voir mes commandes"
+              variant="outline"
+              onPress={() => router.replace('/orders')}
+              fullWidth
+            />
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -280,4 +310,10 @@ const styles = StyleSheet.create({
   timelineLine: { width: 2, flex: 1, minHeight: 24 },
   timelineTextWrap: { paddingBottom: 20, paddingTop: -2 },
   timelineLabel: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  deliveredBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderRadius: 14, padding: 14,
+  },
+  deliveredText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', flex: 1 },
+  ctaWrap: { gap: 10, paddingBottom: 8 },
 });

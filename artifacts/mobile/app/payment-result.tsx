@@ -16,6 +16,7 @@ export default function PaymentResultScreen() {
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const pollCount = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -30,7 +31,7 @@ export default function PaymentResultScreen() {
 
         pollCount.current += 1;
         if (pollCount.current < MAX_POLLS) {
-          setTimeout(poll, POLL_INTERVAL_MS);
+          timeoutRef.current = setTimeout(poll, POLL_INTERVAL_MS);
         } else {
           setError(true);
         }
@@ -40,6 +41,10 @@ export default function PaymentResultScreen() {
     };
 
     poll();
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [orderId]);
 
   const isPaid = paymentStatus === 'paid';

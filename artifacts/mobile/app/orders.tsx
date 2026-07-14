@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -66,9 +66,18 @@ export default function OrdersScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.data]);
 
+  const handleRefresh = useCallback(() => {
+    setPage(1);
+    setAllOrders([]);
+    queryClient.invalidateQueries({ queryKey: ['orders-history'] });
+  }, [queryClient]);
+
   if (!isAuthenticated) return null;
 
-  const hasMore = query.data ? query.data.current_page < query.data.last_page : false;
+  const isRefreshing = query.isFetching && page === 1;
+  const hasMore = query.data
+    ? query.data.current_page < query.data.last_page
+    : false;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -77,6 +86,14 @@ export default function OrdersScreen() {
         data={allOrders}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         renderItem={({ item }) => (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.cardHeader}>
@@ -109,9 +126,15 @@ export default function OrdersScreen() {
         )}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListEmptyComponent={
-          !query.isLoading ? (
+          query.isLoading ? (
+            <View style={styles.skeletonWrap}>
+              {[1, 2, 3].map((i) => (
+                <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.muted }]} />
+              ))}
+            </View>
+          ) : (
             <EmptyState icon="clock" title="Aucune commande" description="Votre historique de commandes apparaîtra ici." />
-          ) : null
+          )
         }
         ListFooterComponent={
           hasMore ? (
@@ -127,7 +150,9 @@ export default function OrdersScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  listContent: { padding: 16 },
+  listContent: { padding: 16, flexGrow: 1 },
+  skeletonWrap: { gap: 12 },
+  skeletonCard: { borderRadius: 18, height: 110 },
   card: { borderRadius: 18, borderWidth: 1, padding: 14, gap: 8 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   reference: { fontSize: 14, fontFamily: 'Inter_700Bold' },

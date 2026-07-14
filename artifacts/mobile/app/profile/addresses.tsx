@@ -13,6 +13,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { CategoryChip } from '@/components/CategoryChip';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import type { Address } from '@/types';
 
 const LABELS = ['Maison', 'Bureau', 'Autre'];
 
@@ -24,6 +25,7 @@ export default function AddressesScreen() {
   const queryClient = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [label, setLabel] = useState('Maison');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('Abidjan');
@@ -46,11 +48,20 @@ export default function AddressesScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] });
       toast.show('Adresse ajoutée', 'success');
-      setShowForm(false);
-      setAddress('');
-      setInstructions('');
+      resetForm();
     },
     onError: (error) => toast.show(getErrorMessage(error, "Impossible d'ajouter l'adresse"), 'error'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<Omit<Address, 'id'>> }) =>
+      updateAddress(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      toast.show('Adresse mise à jour', 'success');
+      resetForm();
+    },
+    onError: (error) => toast.show(getErrorMessage(error, "Impossible de modifier l'adresse"), 'error'),
   });
 
   const defaultMutation = useMutation({
@@ -69,20 +80,45 @@ export default function AddressesScreen() {
 
   if (!isAuthenticated) return null;
 
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setLabel('Maison');
+    setAddress('');
+    setCity('Abidjan');
+    setInstructions('');
+  };
+
+  const openEdit = (addr: Address) => {
+    setEditingId(addr.id);
+    setLabel(addr.label);
+    setAddress(addr.address);
+    setCity(addr.city);
+    setInstructions(addr.instructions ?? '');
+    setShowForm(true);
+  };
+
   const handleSubmit = () => {
     if (!address.trim()) {
       toast.show('Veuillez saisir une adresse', 'error');
       return;
     }
-    createMutation.mutate({
-      label,
-      address,
-      city,
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      instructions: instructions || undefined,
-      is_default: (addressesQuery.data?.length ?? 0) === 0,
-    });
+    if (editingId !== null) {
+      updateMutation.mutate({
+        id: editingId,
+        payload: { label, address, city, instructions: instructions || undefined },
+      });
+    } else {
+      createMutation.mutate({
+        label,
+        address,
+        city,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        instructions: instructions || undefined,
+        is_default: (addressesQuery.data?.length ?? 0) === 0,
+      });
+    }
   };
 
   const confirmDelete = (id: number) => {
@@ -91,6 +127,8 @@ export default function AddressesScreen() {
       { text: 'Supprimer', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
     ]);
   };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -113,6 +151,11 @@ export default function AddressesScreen() {
               <Text style={[styles.addressText, { color: colors.mutedForeground }]}>
                 {addr.address}, {addr.city}
               </Text>
+              {addr.instructions ? (
+                <Text style={[styles.instructionsText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                  {addr.instructions}
+                </Text>
+              ) : null}
             </View>
             <View style={styles.actions}>
               {!addr.is_default && (
@@ -123,6 +166,7 @@ export default function AddressesScreen() {
                   onPress={() => defaultMutation.mutate(addr.id)}
                 />
               )}
+              <Feather name="edit-2" size={18} color={colors.primary} onPress={() => openEdit(addr)} />
               <Feather name="trash-2" size={18} color={colors.destructive} onPress={() => confirmDelete(addr.id)} />
             </View>
           </View>
@@ -134,6 +178,9 @@ export default function AddressesScreen() {
 
         {showForm ? (
           <View style={[styles.form, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.formTitle, { color: colors.foreground }]}>
+              {editingId ? 'Modifier l\'adresse' : 'Nouvelle adresse'}
+            </Text>
             <View style={styles.chipsRow}>
               {LABELS.map((l) => (
                 <CategoryChip key={l} label={l} active={label === l} onPress={() => setLabel(l)} />
@@ -156,14 +203,23 @@ export default function AddressesScreen() {
             <TextInput
               value={instructions}
               onChangeText={setInstructions}
-              placeholder="Instructions (optionnel)"
+              placeholder="Instructions pour le livreur (optionnel)"
               placeholderTextColor={colors.mutedForeground}
               style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground }]}
             />
-            <Text style={[styles.gpsNote, { color: colors.mutedForeground }]}>
-              📍 Votre position actuelle sera utilisée comme repère GPS pour cette adresse.
-            </Text>
-            <Button label="Enregistrer l'adresse" onPress={handleSubmit} loading={createMutation.isPending} fullWidth />
+            {!editingId && (
+              <Text style={[styles.gpsNote, { color: colors.mutedForeground }]}>
+                📍 Votre position actuelle sera utilisée comme repère GPS.
+              </Text>
+            )}
+            <View style={styles.formButtons}>
+              <Button label="Annuler" variant="outline" onPress={resetForm} />
+              <Button
+                label={editingId ? 'Mettre à jour' : 'Enregistrer'}
+                onPress={handleSubmit}
+                loading={isSaving}
+              />
+            </View>
           </View>
         ) : (
           <Button label="+ Ajouter une adresse" variant="outline" onPress={() => setShowForm(true)} fullWidth />
@@ -183,9 +239,12 @@ const styles = StyleSheet.create({
   defaultBadge: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 999 },
   defaultText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   addressText: { fontSize: 12.5, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  instructionsText: { fontSize: 11.5, fontFamily: 'Inter_400Regular', marginTop: 2, fontStyle: 'italic' },
   actions: { flexDirection: 'row', gap: 14 },
   form: { borderRadius: 18, borderWidth: 1, padding: 16, gap: 12, marginTop: 4 },
+  formTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   chipsRow: { flexDirection: 'row', gap: 8 },
   input: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, fontFamily: 'Inter_400Regular' },
   gpsNote: { fontSize: 11.5, fontFamily: 'Inter_400Regular', lineHeight: 16 },
+  formButtons: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
 });
