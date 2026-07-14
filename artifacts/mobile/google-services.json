@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "588623912053",
+    "project_id": "menuprodelivr",
+    "storage_bucket": "menuprodelivr.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:588623912053:android:729fd047573f71d82aac3c",
+        "android_client_info": {
+          "package_name": "com.menupro.delivery"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAtE67l5tUyTXcmlNLOru38xb0DtkKFZ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

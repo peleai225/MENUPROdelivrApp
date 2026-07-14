@@ -48,8 +48,7 @@ Thumbs.db
 .cache/
 .local/
 
-# Firebase credentials (ne jamais committer)
-google-services.json
+# Firebase credentials iOS (contient des clés privées)
 GoogleService-Info.plist
 
 # Env files
