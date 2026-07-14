@@ -17,9 +17,6 @@
       },
       "ios": {
         "simulator": false
-      },
-      "env": {
-        "GOOGLE_SERVICES_JSON": "secret:GOOGLE_SERVICES_JSON"
       }
     },
     "production": {
